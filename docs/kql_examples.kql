@@ -1,0 +1,12 @@
+// EXAMPLE ONLY. Requires a hypothetical HardwareTelemetry table in Azure Data Explorer / Log Analytics.
+// Replace column names and datasource schema to match actual ingestion; not executed here.
+HardwareTelemetry
+| where Timestamp > ago(1h)
+| summarize MaxTemp=max(TempC), Readings=count() by DeviceId
+| where MaxTemp >= 80
+| order by MaxTemp desc
+
+HardwareTelemetry
+| where Timestamp > ago(24h)
+| summarize ErrorRate=100.0 * countif(IsUnhealthy == true) / count() by bin(Timestamp, 1h)
+| order by Timestamp asc

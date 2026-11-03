@@ -1,0 +1,69 @@
+
+name: Microsoft SCHIE - Linux C++ and Python CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux-validation:
+    name: Linux Build and 25 Automated Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify development tools
+        run: |
+          python3 --version
+          g++ --version
+          make --version
+
+      - name: Build C++ collector
+        run: make build
+
+      - name: Compile hardware simulators with strict warnings
+        run: |
+          mkdir -p build
+
+          for source in \
+            cpp/i2c_sensor_sim.cpp \
+            cpp/spi_device_sim.cpp \
+            cpp/uart_frame_sim.cpp
+          do
+            name=$(basename "$source" .cpp)
+            g++ -std=c++17 -O2 \
+              -Wall -Wextra -Werror -pedantic \
+              "$source" -o "build/$name"
+          done
+
+      - name: Run all automated tests
+        run: make test
+
+      - name: Verify telemetry output
+        run: |
+          ./build/collector telemetry.jsonl 4 50
+
+          python3 - <<'PY'
+          import json
+
+          with open("telemetry.jsonl", encoding="utf-8") as f:
+              rows = [json.loads(line) for line in f]
+
+          assert len(rows) == 200
+          assert sum(r["unhealthy"] for r in rows) == 8
+
+          print("Telemetry validation passed: 200 readings")
+          PY
+
+      - name: Verify hardware simulators
+        run: |
+          ./build/i2c_sensor_sim
+          ./build/spi_device_sim
+          ./build/uart_frame_sim
